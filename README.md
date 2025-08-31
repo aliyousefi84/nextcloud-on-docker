@@ -1,2 +1,7 @@
-# nextcloud-on-docker
-today i will show how we can run nextcloud on docker 
+# Nextcloud on Docker
+
+A simple, reproducible setup to run Nextcloud using Docker.
+## Getting started
+    git clone 
+
+    
