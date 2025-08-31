@@ -1,0 +1,36 @@
+services:
+    next:
+      restart: always
+      image: nextcloud:latest
+      container_name: nextcloud
+      volumes: 
+        - next_data:/var/www/html
+      ports:
+        - "${nextcloudport}:80"
+      networks:
+        - docker-ali
+    db:
+      restart: always
+      image: mysql:latest
+      container_name: database
+      ports:
+        - "${DBport}:3306"
+      volumes:
+        - mysql_data:/var/lib/mysql
+      environment:
+        - MYSQL_ROOT_PASSWORD=${DBroot}
+        - MYSQL_DATABASE=${DBname}
+        - MYSQL_USER=${DBuser}
+        - MYSQL_PASSWORD=${DBpassword}
+      networks:
+        - docker-ali
+volumes:
+  next_data:
+  mysql_data:
+networks:
+   docker-ali:
+      driver: bridge
+      ipam:
+       config:
+         - subnet: "192.168.200.0/24"
+           gateway: 192.168.200.1
