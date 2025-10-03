@@ -1,0 +1,196 @@
+---
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: mysql-configmap
+
+data:
+  MYSQL_DATABASE: nextcloud
+  MYSQL_USER: nextcloud
+---
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: nextcloud-configmap
+
+data:
+  MYSQL_HOST: mysql-clusterip
+  MYSQL_DATABASE: nextcloud
+  MYSQL_USER: nextcloud
+  NEXTCLOUD_USER_ADMIN: admin
+---
+apiVersion: v1
+kind: Secret
+
+metadata:
+  name: mysql-secret
+type: Opaque
+data:
+  mysql-root-password: QWFAMTAwMjAwJCQjIw==
+  mysql-password: QWFAMTAwMjAwJCQjIw==
+---
+apiVersion: v1
+kind: Secret
+
+metadata:
+  name: nextcloud-secret
+type: Opaque
+data:
+  mysql-password: QWFAMTAwMjAwJCQjIw==
+  nextcloud-user-password: QWFAMTAwMjAwJCQjIw==
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: mysql-headless
+
+spec:
+  clusterIP: None
+  selector:
+    apps: mysql
+  ports:
+    - port: 3306
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: mysql-pvc-ali
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: nextcloud-pvc-ali
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: mysql-db
+    
+spec:
+  serviceName: mysql-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      apps: mysql
+  template:
+    metadata:
+      name: mysql-db
+      labels:
+        apps: mysql
+    spec:
+      containers:
+        - name: mysql-db
+          image: mysql:latest
+          ports:
+            - containerPort: 3306
+          envFrom:
+            - configMapRef:
+                 name: mysql-configmap
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-root-password
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: mysql-password
+          volumeMounts:
+            - name: mysql-pvc-ali
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-pvc-ali
+          persistentVolumeClaim:
+            claimName: mysql-pvc-ali
+---
+apiVersion: apps/v1
+kind: Deployment 
+
+metadata:
+  name: nextcloud
+  labels:
+    apps: nextcloud
+
+spec:
+  selector:
+    matchLabels:
+      apps: nextcloud
+  template:
+    metadata:
+      name: nextcloud
+      labels:
+        apps: nextcloud
+    spec:
+      containers:
+        - name: nextcloud
+          image: nextcloud:latest
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: nextcloud-configmap
+          env:
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-secret
+                  key: mysql-password
+            - name: NEXTCLOUD_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-secret
+                  key: nextcloud-user-password
+          volumeMounts:
+            - name: nextcloud-pvc-ali
+              mountPath: /var/www/html
+      volumes:
+        - name: nextcloud-pvc-ali
+          persistentVolumeClaim:
+            claimName: nextcloud-pvc-ali
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: nextcloud-loadbalancer
+
+spec:
+  selector:
+    apps: nextcloud
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+  type: LoadBalancer 
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: mysql-clusterip
+spec:
+  selector:
+    apps: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
